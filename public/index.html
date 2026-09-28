@@ -147,6 +147,8 @@ dialog form{display:flex;flex-direction:column;max-height:calc(100dvh - 24px)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 
 /* Additions */
+nav.tabs{overflow-x:auto;max-width:100%}
+nav.tabs button{white-space:nowrap;padding:9px 13px}
 .topright{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .live{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.88rem}
 .live i{width:9px;height:9px;border-radius:50%;background:var(--ok);display:inline-block}
@@ -170,6 +172,32 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
 .reorder strong{color:var(--low)}
 .supline{font-size:.88rem;color:var(--muted)}
 .supline a{color:var(--navy)}
+.intro{max-width:70ch;color:var(--muted);margin:0 0 16px}
+.namecols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.namepanel{background:var(--panel);border:1px solid var(--line);border-radius:6px;border-top:4px solid var(--tape);padding:16px;display:flex;flex-direction:column;gap:12px}
+.namepanel h2{margin:0;font-size:1.15rem}
+.namepanel .subtle{margin:-8px 0 0}
+.addname{display:flex;gap:8px}
+.addname input{flex:1}
+.namelist{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:8px;max-height:420px;overflow-y:auto}
+.namelist li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 6px 6px 12px;border-bottom:1px solid var(--line)}
+.namelist li:last-child{border-bottom:0}
+.namelist li.none{color:var(--muted);padding:12px}
+.linkbtn{border:0;background:transparent;color:var(--navy);font-weight:700;cursor:pointer;padding:8px;min-height:36px}
+.pick{display:flex;flex-direction:column;gap:6px}
+.sizes{display:flex;flex-wrap:wrap;gap:6px}
+.sz{display:inline-flex;align-items:baseline;gap:6px;border:1.5px solid var(--line);border-radius:6px;padding:3px 8px;font-variant-numeric:tabular-nums;font-size:.92rem}
+.sz b{font-weight:700}
+.sz.low{border-color:var(--low);background:var(--low-bg);color:var(--low)}
+.sz.out{border-color:var(--out);background:var(--out-bg);color:var(--out);text-decoration:line-through}
+.sizeeditor{border:1.5px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--field)}
+.sizehead,.sizerow{display:grid;grid-template-columns:1fr 110px auto;gap:8px;align-items:center}
+.sizehead{font-size:.83rem;color:var(--muted);font-weight:700}
+.sizerow input{background:var(--panel)!important}
+.sizebtns{display:flex;flex-wrap:wrap;gap:6px}
+.szbadge{display:inline-block;border:1.5px solid var(--navy);color:var(--navy);border-radius:6px;padding:1px 8px;font-weight:700;font-size:.9rem;white-space:nowrap}
+.sizefilter{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:-4px 0 14px}
+.sizefilter > span{font-weight:700;color:var(--muted);font-size:.9rem}
 .alert .sups{display:block;font-size:.9rem;color:var(--muted);margin-top:2px}
 </style>
 </head>
@@ -200,6 +228,7 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
         <button role="tab" data-tab="stock" aria-selected="true">Stock <span class="count" id="lowCount" hidden>0</span></button>
         <button role="tab" data-tab="log" aria-selected="false">Issue log</button>
         <button role="tab" data-tab="suppliers" aria-selected="false">Suppliers</button>
+        <button role="tab" data-tab="names" aria-selected="false">Names</button>
       </nav>
       <span class="live" id="live" title="Changes from other devices appear automatically"><i></i><span id="liveText">Live</span></span>
       <button class="btn ghost small" id="logoutBtn">Log out</button>
@@ -237,14 +266,15 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
       <label>To<input type="date" id="logTo"></label>
       <label>Show<select id="logType"><option value="issued">Items issued</option><option value="received">Stock received</option><option value="all">Everything</option></select></label>
     </div>
+    <div class="sizefilter" id="sizeFilter" role="group" aria-label="Filter by size" hidden><span>Sizes</span><div class="chips" id="sizeChips"></div></div>
     <div class="toolbar">
       <div class="stats grow" id="logStats" style="margin:0"></div>
       <button class="btn ghost" id="dlLog">Download this list</button>
     </div>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Issued to / from</th><th>Purpose</th><th>Recorded by</th><th><span style="position:absolute;left:-9999px">Actions</span></th></tr></thead>
-        <tbody id="logBody"><tr><td colspan="7" class="loading">Loading log…</td></tr></tbody>
+        <thead><tr><th>Date</th><th>Item</th><th>Size</th><th>Qty</th><th>Issued to / from</th><th>Purpose</th><th>Recorded by</th><th><span style="position:absolute;left:-9999px">Actions</span></th></tr></thead>
+        <tbody id="logBody"><tr><td colspan="8" class="loading">Loading log…</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -258,6 +288,27 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
     </div>
     <div id="supGrid" class="grid"></div>
   </section>
+
+  <!-- NAMES -->
+  <section id="view-names" role="tabpanel" hidden>
+    <p class="intro">These names appear as a drop-down when you issue items, so nobody has to type them. For a one-off you can still choose "Someone else" and type the name.</p>
+    <div class="namecols">
+      <div class="namepanel" data-list="recipients">
+        <h2>Issued to</h2>
+        <p class="subtle">Staff, teams or programmes who receive items</p>
+        <form class="addname"><input type="text" maxlength="300" placeholder="Add names, separated by commas" aria-label="Add names to the Issued to list"><button class="btn small" type="submit">Add</button></form>
+        <ul class="namelist"></ul>
+        <button class="btn ghost small" type="button" data-import>Add names already used in the log</button>
+      </div>
+      <div class="namepanel" data-list="staff">
+        <h2>Recorded by</h2>
+        <p class="subtle">Staff who record issues and deliveries</p>
+        <form class="addname"><input type="text" maxlength="300" placeholder="Add names, separated by commas" aria-label="Add names to the Recorded by list"><button class="btn small" type="submit">Add</button></form>
+        <ul class="namelist"></ul>
+        <button class="btn ghost small" type="button" data-import>Add names already used in the log</button>
+      </div>
+    </div>
+  </section>
 </div>
 
 <!-- Item dialog -->
@@ -268,9 +319,19 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
       <label class="full">Item name<input type="text" name="name" required maxlength="120" autocomplete="off"></label>
       <label>Category<input type="text" name="category" list="catList" maxlength="60" placeholder="e.g. Cleaning" autocomplete="off"></label>
       <label>Storage location<input type="text" name="location" maxlength="60" placeholder="e.g. Cupboard B, shelf 2" autocomplete="off"></label>
-      <label>Quantity in stock<input type="number" name="quantity" min="0" step="1" inputmode="numeric" required></label>
+      <label class="full checkline"><input type="checkbox" id="hasSizes"><span>This item comes in sizes (e.g. clothing)</span></label>
+      <label id="qtyLabel">Quantity in stock<input type="number" name="quantity" min="0" step="1" inputmode="numeric"></label>
       <label>Unit<input type="text" name="unit" maxlength="30" placeholder="e.g. boxes, packs, each" list="unitList" autocomplete="off"></label>
-      <label>Flag as low at or below<input type="number" name="minLevel" min="0" step="1" inputmode="numeric"><span class="hint">Flagged for reordering at this number.</span></label>
+      <div class="full sizeeditor" id="sizeEditor" hidden>
+        <div class="sizehead"><span>Size</span><span>In stock</span><span></span></div>
+        <div id="sizeRows" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div class="sizebtns">
+          <button type="button" class="btn ghost small" id="addSizeRow">+ Add size</button>
+          <button type="button" class="btn ghost small" data-preset="adult">Add adult sizes</button>
+          <button type="button" class="btn ghost small" data-preset="kids">Add children's sizes</button>
+        </div>
+      </div>
+      <label>Flag as low at or below<input type="number" name="minLevel" min="0" step="1" inputmode="numeric"><span class="hint" id="minHint">Flagged for reordering at this number.</span></label>
       <label>Supplier<select name="supplierId" id="itemSupplier"></select><span class="hint">Add suppliers in the Suppliers tab.</span></label>
       <div class="full">
         <div style="font-weight:700;font-size:.93rem;margin-bottom:6px">Photo</div>
@@ -298,11 +359,17 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
   <form id="moveForm" novalidate>
     <div class="dhead"><h2 id="moveTitle">Issue item</h2><p id="moveSub"></p></div>
     <div class="dbody">
+      <label class="full" id="sizeLabel" hidden>Size<select name="size" id="sizeSel"></select></label>
       <label>Quantity<input type="number" name="qty" min="1" step="1" inputmode="numeric" required></label>
       <label>Date<input type="date" name="date" required></label>
-      <label class="full"><span id="personText">Issued to</span><input type="text" name="person" maxlength="100" list="personList" autocomplete="off"><span class="hint" id="personHint"></span></label>
+      <div class="full pick"><label for="personSel" id="personText" style="font-weight:700;font-size:.93rem">Issued to</label>
+        <select id="personSel"></select>
+        <input type="text" name="person" id="personInput" maxlength="100" list="personList" autocomplete="off" placeholder="Type the name" aria-labelledby="personText">
+        <span class="hint subtle" id="personHint" style="font-size:.83rem"></span></div>
       <label class="full" id="purposeLabel">What it's for<input type="text" name="purpose" maxlength="160" list="purposeList" autocomplete="off" placeholder="e.g. Summer Programme art session"></label>
-      <label class="full">Recorded by<input type="text" name="by" maxlength="80" autocomplete="off" placeholder="Your name"></label>
+      <div class="full pick"><label for="bySel" id="byText" style="font-weight:700;font-size:.93rem">Recorded by</label>
+        <select id="bySel"></select>
+        <input type="text" name="by" id="byInput" maxlength="80" autocomplete="off" placeholder="Your name" aria-labelledby="byText"></div>
       <label class="full">Notes<textarea name="notes" maxlength="400"></textarea></label>
       <p class="err" id="moveErr"></p>
     </div>
@@ -374,7 +441,7 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
   const PHOTO_SVG = '<svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>';
 
   let token = store.get("stores.token");
-  let S = { version:0, items:[], moves:[], suppliers:[] };
+  let S = { version:0, items:[], moves:[], suppliers:[], lists:{recipients:[],staff:[]} };
   let loaded = false, statusFilter="all", currentTab="stock";
   let editingId=null, pendingPhoto=null, removePhoto=false, moveCtx=null, editingSup=null;
   let pollTimer=null, busy=0;
@@ -382,7 +449,27 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
   const photoUrl = id => `/api/photos/${encodeURIComponent(id)}?t=${encodeURIComponent(token)}`;
   const itemById = id => S.items.find(i=>i.id===id);
   const supById = id => (S.suppliers||[]).find(s=>s.id===id);
-  function status(it){ const q=it.quantity||0, m=it.minLevel||0; return q<=0?"out":q<=m?"low":"ok"; }
+  const sized = it => Array.isArray(it.sizes) && it.sizes.length>0;
+  const sizeStatus = (z,min) => z.quantity<=0?"out":z.quantity<=min?"low":"ok";
+  function status(it){
+    const q=it.quantity||0, m=it.minLevel||0;
+    if(sized(it)){ if(it.sizes.every(z=>z.quantity<=0)) return "out"; return it.sizes.some(z=>z.quantity<=m)?"low":"ok"; }
+    return q<=0?"out":q<=m?"low":"ok";
+  }
+  // "T-shirt (M: 1, L: 0)" for sized items, "Gloves (2)" otherwise
+  function lowLabel(it){
+    if(!sized(it)) return `${it.name} (${it.quantity||0})`;
+    const m=it.minLevel||0; return `${it.name} (${it.sizes.filter(z=>z.quantity<=m).map(z=>`${z.size}: ${z.quantity}`).join(", ")})`;
+  }
+  // Sizes in a sensible order: as entered on items, then any others alphabetically
+  function orderSizes(list){
+    const order=[], seen=new Set();
+    S.items.forEach(it=>(it.sizes||[]).forEach(z=>{ const k=z.size.toLowerCase(); if(!seen.has(k)){ seen.add(k); order.push(z.size); } }));
+    const want=new Map(list.map(x=>[x.toLowerCase(),x]));
+    const known=order.filter(x=>want.has(x.toLowerCase())).map(x=>want.get(x.toLowerCase()));
+    const extra=[...want.values()].filter(x=>!seen.has(x.toLowerCase())).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+    return known.concat(extra);
+  }
   const statusText = {ok:"In stock", low:"Running low", out:"Out of stock"};
   function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2800); }
 
@@ -401,7 +488,7 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
   }
   function apply(data){
     if(!data || data.unchanged || !Array.isArray(data.items)) return;
-    S = { version:data.version||0, items:data.items||[], moves:data.moves||[], suppliers:data.suppliers||[] };
+    S = { version:data.version||0, items:data.items||[], moves:data.moves||[], suppliers:data.suppliers||[], lists:{ recipients:data.lists?.recipients||[], staff:data.lists?.staff||[] } };
     loaded = true; renderAll();
   }
   async function refresh(){
@@ -423,7 +510,7 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
   // ---------- Login ----------
   function showLogin(msg){ $("#app").hidden=true; $("#loginScreen").hidden=false; $("#loginErr").textContent=msg||""; setTimeout(()=>$("#loginForm").username.focus(),30); }
   function showApp(){ $("#loginScreen").hidden=true; $("#app").hidden=false; refresh(); startPolling(); }
-  function logout(msg){ token=null; store.set("stores.token",null); stopPolling(); S={version:0,items:[],moves:[],suppliers:[]}; loaded=false; $$("dialog").forEach(d=>d.open&&d.close()); showLogin(msg); }
+  function logout(msg){ token=null; store.set("stores.token",null); stopPolling(); S={version:0,items:[],moves:[],suppliers:[],lists:{recipients:[],staff:[]}}; loaded=false; $$("dialog").forEach(d=>d.open&&d.close()); showLogin(msg); }
   $("#pwToggle").onclick=()=>{ const p=$("#pw"), show=p.type==="password"; p.type=show?"text":"password"; $("#pwToggle").textContent=show?"Hide":"Show"; $("#pwToggle").setAttribute("aria-label", show?"Hide password":"Show password"); };
   $("#loginForm").addEventListener("submit", async e=>{
     e.preventDefault(); const f=e.target, err=$("#loginErr"), b=$("#loginBtn");
@@ -436,12 +523,12 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
   $("#logoutBtn").onclick=()=>logout();
 
   // ---------- Tabs & dialogs ----------
-  function showTab(t){ currentTab=t; $$("nav.tabs button").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===t)); ["stock","log","suppliers"].forEach(v=>$("#view-"+v).hidden = v!==t); }
+  function showTab(t){ currentTab=t; $$("nav.tabs button").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===t)); ["stock","log","suppliers","names"].forEach(v=>$("#view-"+v).hidden = v!==t); }
   $$("nav.tabs button").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
   $$("dialog [data-close]").forEach(b=>b.onclick=()=>b.closest("dialog").close());
   $$("dialog").forEach(d=>d.addEventListener("click",e=>{ if(e.target===d) d.close(); }));
 
-  function renderAll(){ renderStock(); renderLog(); renderSuppliers(); }
+  function renderAll(){ renderStock(); renderLog(); renderSuppliers(); renderNames(); }
 
   // ---------- Stock ----------
   function filteredItems(){
@@ -465,7 +552,7 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
     if(lowItems.length){
       al.classList.remove("hidden");
       $("#lowAlertTitle").textContent = lowItems.length===1?"1 item needs reordering":`${lowItems.length} items need reordering`;
-      const names=lowItems.slice(0,6).map(it=>`${it.name} (${it.quantity||0})`).join(", ");
+      const names=lowItems.slice(0,6).map(lowLabel).join(", ");
       const supNames=[...new Set(lowItems.map(it=>supById(it.supplierId)?.name).filter(Boolean))];
       $("#lowAlertNames").innerHTML = esc(names + (lowItems.length>6?` and ${lowItems.length-6} more`:"")) + (supNames.length?`<span class="sups">Order from: ${esc(supNames.join(", "))}</span>`:"");
     } else al.classList.add("hidden");
@@ -494,8 +581,9 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
       return `<article class="card">${photo}
         <div class="label">
           <div class="row1"><div><h3>${esc(it.name)}</h3><div class="meta">${esc([it.category,it.location].filter(Boolean).join(" • "))}</div></div><span class="badge ${s}">${statusText[s]}</span></div>
-          <div class="qty">${qty}<small>${esc(it.unit||"")}</small></div>
-          ${min>0?`<div class="meter ${s}" aria-hidden="true"><div class="fill" style="width:${pct}%"></div><div class="mark" style="left:${markPct}%"></div></div>
+          <div class="qty">${qty}<small>${esc(it.unit||"")}${sized(it)?` across ${it.sizes.length} ${it.sizes.length===1?"size":"sizes"}`:""}</small></div>
+          ${sized(it)?`<div class="sizes">${it.sizes.map(z=>{ const zs=sizeStatus(z,min); return `<span class="sz ${zs}" title="${statusText[zs]}"><b>${esc(z.size)}</b>${z.quantity}</span>`; }).join("")}</div>
+          <div class="meterlabel"><span>${min>0?`Each size flagged at ${min}`:"Sizes flagged when they run out"}</span></div>`:min>0?`<div class="meter ${s}" aria-hidden="true"><div class="fill" style="width:${pct}%"></div><div class="mark" style="left:${markPct}%"></div></div>
           <div class="meterlabel"><span>Flag at ${min}</span>${s==="ok"?`<span>${qty-min} above</span>`:""}</div>`:`<div class="meterlabel"><span>No low-stock level set</span></div>`}
           ${sup?`<div class="supline">Supplier: <a href="#" data-sup="${esc(sup.id)}">${esc(sup.name)}</a>${sup.phone&&s!=="ok"?` • <a href="tel:${esc(sup.phone.replace(/[^\d+]/g,""))}">${esc(sup.phone)}</a>`:""}</div>`:""}
           <div class="actions">
@@ -531,9 +619,45 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
     f.name.value=it?.name||""; f.category.value=it?.category||""; f.location.value=it?.location||"";
     f.quantity.value=it?(it.quantity||0):""; f.unit.value=it?.unit||""; f.minLevel.value=it?(it.minLevel||0):""; f.notes.value=it?.notes||"";
     $("#itemSupplier").innerHTML=supplierOptions(it?.supplierId||"");
+    sizesTouched=false; $("#sizeRows").innerHTML="";
+    (it?.sizes||[]).forEach(z=>addSizeRow(z.size,z.quantity));
+    setSized(it?sized(it):false);
     setPrev(it?.photo?photoUrl(it.photo):null);
     $("#itemDlg").showModal(); f.name.focus();
   }
+  // Sizes editor
+  let sizesTouched=false;
+  const PRESETS={ adult:["XS","S","M","L","XL","XXL"], kids:["3-4 yrs","5-6 yrs","7-8 yrs","9-10 yrs","11-12 yrs","13-14 yrs"] };
+  function addSizeRow(name="",qty=""){
+    const r=document.createElement("div"); r.className="sizerow";
+    r.innerHTML=`<input type="text" class="szname" maxlength="20" aria-label="Size" placeholder="e.g. M"><input type="number" class="szqty" min="0" step="1" inputmode="numeric" aria-label="Quantity in stock" placeholder="0"><button type="button" class="linkbtn" data-delrow>Remove</button>`;
+    r.querySelector(".szname").value=name; r.querySelector(".szqty").value=qty;
+    $("#sizeRows").appendChild(r); return r;
+  }
+  function setSized(on){
+    $("#hasSizes").checked=on; $("#sizeEditor").hidden=!on; $("#qtyLabel").hidden=on;
+    $("#minHint").textContent = on ? "Each size is flagged for reordering at this number." : "Flagged for reordering at this number.";
+    if(on && !$("#sizeRows").children.length) addSizeRow();
+  }
+  $("#hasSizes").addEventListener("change",e=>{
+    sizesTouched=true;
+    if(!e.target.checked){
+      const rows=$$("#sizeRows .sizerow"); const t=rows.reduce((a,r)=>a+(int(r.querySelector(".szqty").value)||0),0);
+      if(rows.length && t>0) $("#itemForm").quantity.value=t;
+    }
+    setSized(e.target.checked);
+  });
+  $("#itemForm").category.addEventListener("input",e=>{
+    if(!editingId && !sizesTouched && /cloth|uniform|shirt|jumper|hoodie|apparel|wear|shoe|trainer/i.test(e.target.value) && !$("#hasSizes").checked) setSized(true);
+  });
+  $("#addSizeRow").onclick=()=>addSizeRow().querySelector(".szname").focus();
+  $$("[data-preset]").forEach(b=>b.onclick=()=>{
+    $$("#sizeRows .sizerow").forEach(r=>{ if(!r.querySelector(".szname").value.trim() && r.querySelector(".szqty").value==="") r.remove(); });
+    const have=new Set($$("#sizeRows .szname").map(i=>i.value.trim().toLowerCase()));
+    PRESETS[b.dataset.preset].forEach(n=>{ if(!have.has(n.toLowerCase())) addSizeRow(n,""); });
+  });
+  $("#sizeRows").addEventListener("click",e=>{ const b=e.target.closest("[data-delrow]"); if(b){ b.closest(".sizerow").remove(); if(!$("#sizeRows").children.length) addSizeRow(); } });
+
   $("#photoInput").addEventListener("change", async e=>{
     const file=e.target.files[0]; e.target.value=""; if(!file) return;
     try{ pendingPhoto=await shrink(file); removePhoto=false; setPrev(URL.createObjectURL(pendingPhoto)); }
@@ -553,7 +677,20 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
     e.preventDefault(); const f=e.target, err=$("#itemErr");
     const name=f.name.value.trim(), qty=int(f.quantity.value), min=f.minLevel.value===""?0:int(f.minLevel.value);
     if(!name){ err.textContent="Give the item a name."; f.name.focus(); return; }
-    if(!(qty>=0)){ err.textContent="Enter the quantity in stock (0 or more)."; f.quantity.focus(); return; }
+    let sizes=null;
+    if($("#hasSizes").checked){
+      sizes=[]; const seen=new Set();
+      for(const r of $$("#sizeRows .sizerow")){
+        const n=r.querySelector(".szname").value.trim(), qv=r.querySelector(".szqty").value;
+        if(!n && qv==="") continue;
+        if(!n){ err.textContent="Give every size a name, or remove the empty row."; r.querySelector(".szname").focus(); return; }
+        const q=qv===""?0:int(qv);
+        if(!(q>=0)){ err.textContent=`Enter a quantity of 0 or more for size ${n}.`; r.querySelector(".szqty").focus(); return; }
+        if(seen.has(n.toLowerCase())){ err.textContent=`Size ${n} is listed twice.`; r.querySelector(".szname").focus(); return; }
+        seen.add(n.toLowerCase()); sizes.push({size:n, quantity:q});
+      }
+      if(!sizes.length){ err.textContent="Add at least one size, or untick the sizes option."; return; }
+    } else if(!(qty>=0)){ err.textContent="Enter the quantity in stock (0 or more)."; f.quantity.focus(); return; }
     if(!(min>=0)){ err.textContent="The low-stock level must be 0 or more."; f.minLevel.focus(); return; }
     const btn=$("#saveItemBtn"); btn.disabled=true; btn.textContent="Saving…";
     try{
@@ -561,7 +698,7 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
       let photo=existing?.photo||null;
       if(pendingPhoto){ const up=await api("POST","photos",pendingPhoto,"image/jpeg"); photo=up.id; }
       else if(removePhoto) photo=null;
-      await write(()=>api("POST","items",{ id:existing?.id, name, quantity:qty, minLevel:min, category:f.category.value, location:f.location.value, unit:f.unit.value, notes:f.notes.value, supplierId:f.supplierId.value, photo }));
+      await write(()=>api("POST","items",{ id:existing?.id, name, quantity:sizes?sizes.reduce((a,z)=>a+z.quantity,0):qty, sizes, minLevel:min, category:f.category.value, location:f.location.value, unit:f.unit.value, notes:f.notes.value, supplierId:f.supplierId.value, photo }));
       $("#itemDlg").close(); toast(existing?"Item saved":"Item added");
     }catch(x){ err.textContent=x.message; }
     finally{ btn.disabled=false; btn.textContent="Save item"; }
@@ -578,63 +715,91 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
     const f=$("#moveForm"); f.reset(); $("#moveErr").textContent="";
     const issue=type==="issued";
     $("#moveTitle").textContent=issue?`Issue ${it.name}`:`Add stock: ${it.name}`;
-    $("#moveSub").textContent=`${it.quantity||0} ${it.unit||""} in stock now`;
+    $("#moveSub").textContent = sized(it) ? `${it.quantity||0} ${it.unit||""} in stock across ${it.sizes.length} sizes` : `${it.quantity||0} ${it.unit||""} in stock now`;
+    $("#sizeLabel").hidden=!sized(it);
+    if(sized(it)) $("#sizeSel").innerHTML='<option value="">Choose a size…</option>'+it.sizes.map(z=>`<option value="${esc(z.size)}" ${issue&&z.quantity<=0?"disabled":""}>${esc(z.size)} (${z.quantity} in stock)</option>`).join("");
     $("#personText").textContent=issue?"Issued to":"Received from";
     $("#personHint").textContent=issue?"Person, team or programme receiving the items":"Supplier or donor (optional)";
     $("#purposeLabel").hidden=!issue;
     $("#moveSave").textContent=issue?"Record issue":"Add to stock";
-    f.date.value=today(); f.by.value=store.get("stores.by")||"";
-    if(!issue){ const sup=supById(it.supplierId); if(sup) f.person.value=sup.name; }
+    f.date.value=today();
+    const sup=supById(it.supplierId);
+    setupPick($("#personSel"), $("#personInput"), issue?S.lists.recipients:[], issue?"":(sup?sup.name:""));
+    setupPick($("#bySel"), $("#byInput"), S.lists.staff, store.get("stores.by")||"");
     const people=issue ? [...new Set(S.moves.filter(m=>m.type==="issued").map(m=>m.person).filter(Boolean))]
                        : [...new Set([...(S.suppliers||[]).map(s=>s.name), ...S.moves.filter(m=>m.type==="received").map(m=>m.person).filter(Boolean)])];
     $("#personList").innerHTML=people.slice(0,100).map(p=>`<option value="${esc(p)}">`).join("");
     $("#purposeList").innerHTML=[...new Set(S.moves.map(m=>m.purpose).filter(Boolean))].slice(0,100).map(p=>`<option value="${esc(p)}">`).join("");
-    $("#moveDlg").showModal(); f.qty.focus();
+    $("#moveDlg").showModal(); (sized(it)?$("#sizeSel"):f.qty).focus();
   }
   $("#moveForm").addEventListener("submit", async e=>{
     e.preventDefault(); if(!moveCtx) return;
     const f=e.target, err=$("#moveErr"), issue=moveCtx.type==="issued", it=itemById(moveCtx.id);
     if(!it){ err.textContent="That item no longer exists."; return; }
-    const qty=int(f.qty.value), have=it.quantity||0;
+    const sizeName = sized(it) ? f.size.value : "";
+    if(sized(it) && !sizeName){ err.textContent="Choose a size."; f.size.focus(); return; }
+    const z = sizeName ? it.sizes.find(x=>x.size===sizeName) : null;
+    const qty=int(f.qty.value), have = z ? z.quantity : (it.quantity||0);
     if(!(qty>=1)){ err.textContent="Enter a quantity of at least 1."; f.qty.focus(); return; }
-    if(issue && qty>have){ err.textContent=`Only ${have} in stock. Issue ${have} or fewer.`; f.qty.focus(); return; }
-    if(issue && !f.person.value.trim()){ err.textContent="Say who the items were issued to."; f.person.focus(); return; }
+    if(issue && qty>have){ err.textContent=`Only ${have} in stock${z?` in size ${z.size}`:""}. Issue ${have} or fewer.`; f.qty.focus(); return; }
+    const person=pickValue($("#personSel"),$("#personInput")), by=pickValue($("#bySel"),$("#byInput"));
+    if(issue && !person){ err.textContent="Choose who the items were issued to."; ($("#personSel").hidden?$("#personInput"):$("#personSel")).focus(); return; }
     if(!f.date.value){ err.textContent="Pick a date."; return; }
     const btn=$("#moveSave"); btn.disabled=true;
     try{
-      store.set("stores.by", f.by.value.trim());
-      const d=await write(()=>api("POST","moves",{ type:moveCtx.type, itemId:it.id, qty, person:f.person.value, purpose:f.purpose.value, by:f.by.value, date:f.date.value, notes:f.notes.value }));
+      store.set("stores.by", by);
+      const d=await write(()=>api("POST","moves",{ type:moveCtx.type, itemId:it.id, size:sizeName, qty, person, purpose:f.purpose.value, by, date:f.date.value, notes:f.notes.value }));
       $("#moveDlg").close();
-      const s=d.result?.status;
-      toast(issue ? (s==="ok"?`Issued ${qty} ${it.name}`:`Issued. ${it.name} is now ${s==="out"?"out of stock":"running low"}`) : `Added ${qty} to ${it.name}`);
+      const s=d.result?.status, label=it.name+(sizeName?` (${sizeName})`:""), left=d.result?.quantity;
+      toast(issue
+        ? (sizeName ? (left===0?`Issued. ${label} is now out of stock`:left<=(it.minLevel||0)?`Issued. ${label} is running low`:`Issued ${qty} ${label}`)
+                    : (s==="ok"?`Issued ${qty} ${label}`:`Issued. ${label} is now ${s==="out"?"out of stock":"running low"}`))
+        : `Added ${qty} to ${label}`);
     }catch(x){ err.textContent=x.message; }
     finally{ btn.disabled=false; }
   });
 
   // ---------- Log ----------
+  const sizeFilter=new Set();
+  function renderSizeChips(){
+    const sizes=orderSizes([...new Set(S.moves.map(m=>m.size).filter(Boolean))]);
+    [...sizeFilter].forEach(k=>{ if(!sizes.some(x=>x.toLowerCase()===k)) sizeFilter.delete(k); });
+    $("#sizeFilter").hidden=!sizes.length;
+    $("#sizeChips").innerHTML=`<button class="chip" data-size="" aria-pressed="${!sizeFilter.size}">All sizes</button>`+
+      sizes.map(x=>`<button class="chip" data-size="${esc(x.toLowerCase())}" aria-pressed="${sizeFilter.has(x.toLowerCase())}">${esc(x)}</button>`).join("");
+  }
+  $("#sizeChips").addEventListener("click",e=>{
+    const b=e.target.closest("[data-size]"); if(!b) return;
+    const k=b.dataset.size;
+    if(!k) sizeFilter.clear(); else if(sizeFilter.has(k)) sizeFilter.delete(k); else sizeFilter.add(k);
+    renderLog();
+  });
   function filteredMoves(){
     const q=$("#logSearch").value.trim().toLowerCase(), from=$("#logFrom").value, to=$("#logTo").value, type=$("#logType").value;
     return S.moves.filter(m=>{
       if(type!=="all" && m.type!==type) return false;
       if(from && (m.date||"")<from) return false;
       if(to && (m.date||"")>to) return false;
-      if(q && !`${m.itemName} ${m.person} ${m.purpose} ${m.by} ${m.notes}`.toLowerCase().includes(q)) return false;
+      if(sizeFilter.size && !sizeFilter.has((m.size||"").toLowerCase())) return false;
+      if(q && !`${m.itemName} ${m.size||""} ${m.person} ${m.purpose} ${m.by} ${m.notes}`.toLowerCase().includes(q)) return false;
       return true;
     }).sort((a,b)=>(b.date||"").localeCompare(a.date||"") || (b.createdAt||0)-(a.createdAt||0));
   }
   function renderLog(){
     const body=$("#logBody");
-    if(!loaded){ body.innerHTML='<tr><td colspan="7" class="loading">Loading log…</td></tr>'; return; }
+    if(!loaded){ body.innerHTML='<tr><td colspan="8" class="loading">Loading log…</td></tr>'; return; }
+    renderSizeChips();
     const list=filteredMoves(), issued=list.filter(m=>m.type==="issued");
     const total=issued.reduce((s,m)=>s+(m.qty||0),0), people=new Set(issued.map(m=>m.person)).size;
     $("#logStats").innerHTML=`<span><b>${list.length}</b>${list.length===1?"entry":"entries"}</span>`+(issued.length?`<span><b>${total}</b>items issued</span><span><b>${people}</b>${people===1?"recipient":"recipients"}</span>`:"");
-    if(!S.moves.length){ body.innerHTML=`<tr><td colspan="7"><div class="empty" style="border:0"><h2>Nothing issued yet</h2><p>Use the Issue button on any item in Stock and it will be recorded here.</p></div></td></tr>`; return; }
-    if(!list.length){ body.innerHTML=`<tr><td colspan="7"><div class="empty" style="border:0"><h2>No entries match</h2><p>Widen the dates or clear the search.</p></div></td></tr>`; return; }
+    if(!S.moves.length){ body.innerHTML=`<tr><td colspan="8"><div class="empty" style="border:0"><h2>Nothing issued yet</h2><p>Use the Issue button on any item in Stock and it will be recorded here.</p></div></td></tr>`; return; }
+    if(!list.length){ body.innerHTML=`<tr><td colspan="8"><div class="empty" style="border:0"><h2>No entries match</h2><p>Widen the dates or clear the search.</p></div></td></tr>`; return; }
     body.innerHTML=list.map(m=>{
       const issue=m.type==="issued", it=itemById(m.itemId);
       return `<tr>
         <td style="white-space:nowrap">${fmtDate(m.date)}</td>
         <td><div class="itemcell">${it?.photo?`<img class="thumb" src="${esc(photoUrl(it.photo))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`:`<span class="thumb"></span>`}<div>${esc(m.itemName)}${m.notes?`<div class="subtle">${esc(m.notes)}</div>`:""}</div></div></td>
+        <td>${m.size?`<span class="szbadge">${esc(m.size)}</span>`:'<span class="subtle">—</span>'}</td>
         <td class="num ${issue?"outq":"in"}">${issue?"−":"+"}${m.qty} <span class="subtle" style="font-weight:400">${esc(m.unit||"")}</span></td>
         <td>${esc(m.person)||'<span class="subtle">—</span>'}${issue?"":'<div class="subtle">Stock received</div>'}</td>
         <td>${esc(m.purpose)||'<span class="subtle">—</span>'}</td>
@@ -648,7 +813,7 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
     const b=e.target.closest("[data-delmove]"); if(!b) return;
     const m=S.moves.find(x=>x.id===b.dataset.delmove); if(!m) return;
     const issue=m.type==="issued", it=itemById(m.itemId);
-    confirmBox({ title:"Delete this entry?", text:`${issue?"Issue of":"Delivery of"} ${m.qty} ${m.itemName} on ${fmtDate(m.date)}.`,
+    confirmBox({ title:"Delete this entry?", text:`${issue?"Issue of":"Delivery of"} ${m.qty} ${m.itemName}${m.size?` (size ${m.size})`:""} on ${fmtDate(m.date)}.`,
       check: it?(issue?`Put ${m.qty} back into stock`:`Take ${m.qty} back out of stock`):null, ok:"Delete entry",
       run: async checked=>{ await write(()=>api("DELETE",`moves/${encodeURIComponent(m.id)}${checked?"?restock=1":""}`)); toast("Entry deleted"); } });
   });
@@ -679,7 +844,7 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
         <div class="row1"><div><h3>${esc(s.name)}</h3>${s.supplies?`<div class="meta">${esc(s.supplies)}</div>`:""}</div></div>
         ${rows.length?`<dl>${rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`:""}
         ${s.notes?`<div class="subtle">${esc(s.notes)}</div>`:""}
-        ${low.length?`<div class="reorder"><strong>To reorder:</strong> ${esc(low.map(i=>`${i.name} (${i.quantity||0})`).join(", "))}</div>`:""}
+        ${low.length?`<div class="reorder"><strong>To reorder:</strong> ${esc(low.map(lowLabel).join(", "))}</div>`:""}
         <div class="supline">${linked.length?`${linked.length} linked ${linked.length===1?"item":"items"}`:"No items linked yet"}</div>
         <div class="actions"><button class="btn small ghost" data-editsup="${esc(s.id)}">Edit</button></div>
       </div></article>`;
@@ -712,6 +877,55 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
       run: async()=>{ await write(()=>api("DELETE","suppliers/"+encodeURIComponent(s.id))); $("#supDlg").close(); toast("Supplier deleted"); } });
   };
 
+  // ---------- Name pickers ----------
+  const OTHER="__other";
+  function setupPick(sel,input,names,current){
+    if(!names.length){ sel.hidden=true; input.hidden=false; input.value=current||""; return; }
+    sel.hidden=false;
+    sel.innerHTML='<option value="">Choose a name…</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")+`<option value="${OTHER}">Someone else (type the name)</option>`;
+    const match=current && names.find(n=>n.toLowerCase()===current.toLowerCase());
+    if(match){ sel.value=match; input.hidden=true; input.value=""; }
+    else if(current){ sel.value=OTHER; input.hidden=false; input.value=current; }
+    else { sel.value=""; input.hidden=true; input.value=""; }
+  }
+  function pickValue(sel,input){ return (sel.hidden||sel.value===OTHER) ? input.value.trim() : sel.value; }
+  [["#personSel","#personInput"],["#bySel","#byInput"]].forEach(([s,i])=>$(s).addEventListener("change",()=>{ const other=$(s).value===OTHER; $(i).hidden=!other; if(other){ $(i).value=""; $(i).focus(); } }));
+
+  // ---------- Names tab ----------
+  function renderNames(){
+    $$(".namepanel").forEach(p=>{
+      const key=p.dataset.list, names=S.lists[key]||[];
+      p.querySelector(".namelist").innerHTML = names.length
+        ? names.map(n=>`<li><span>${esc(n)}</span><button class="linkbtn" data-remove="${esc(n)}" aria-label="Remove ${esc(n)}">Remove</button></li>`).join("")
+        : `<li class="none">No names yet. Add some above.</li>`;
+    });
+  }
+  async function changeList(list, body, msg){
+    try{ await write(()=>api("POST","lists",{list, ...body})); if(msg) toast(msg); }
+    catch(x){ toast(x.message); }
+  }
+  $$(".namepanel").forEach(p=>{
+    const key=p.dataset.list, input=p.querySelector("input");
+    p.querySelector("form").addEventListener("submit", async e=>{
+      e.preventDefault();
+      const names=input.value.split(/[,;\n]/).map(n=>n.trim()).filter(Boolean);
+      if(!names.length){ input.focus(); return; }
+      input.value="";
+      await changeList(key,{add:names}, names.length===1?`Added ${names[0]}`:`Added ${names.length} names`);
+      input.focus();
+    });
+    p.querySelector(".namelist").addEventListener("click", e=>{
+      const b=e.target.closest("[data-remove]"); if(b) changeList(key,{remove:b.dataset.remove}, `Removed ${b.dataset.remove}`);
+    });
+    p.querySelector("[data-import]").addEventListener("click", ()=>{
+      const used = key==="recipients" ? S.moves.filter(m=>m.type==="issued").map(m=>m.person) : S.moves.map(m=>m.by);
+      const have=new Set((S.lists[key]||[]).map(n=>n.toLowerCase()));
+      const fresh=[...new Set(used.filter(Boolean))].filter(n=>!have.has(n.toLowerCase()));
+      if(!fresh.length){ toast("No new names found in the log"); return; }
+      changeList(key,{add:fresh}, fresh.length===1?"Added 1 name from the log":`Added ${fresh.length} names from the log`);
+    });
+  });
+
   // ---------- Downloads ----------
   function downloadCsv(name, rows){
     const cell=v=>{ const s=String(v??""); return /[",\n\r]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; };
@@ -722,14 +936,24 @@ input[type=password],input[type=email],input[type=tel],input[type=url]{width:100
   $("#dlStock").onclick=()=>{
     const list=filteredItems(); if(!list.length){ toast("No items to download"); return; }
     const label={all:"stock",low:"reorder",out:"out-of-stock"}[statusFilter];
-    downloadCsv(`${label}-list-${today()}.csv`, [["Item","Category","Location","Quantity","Unit","Low-stock level","Status","Supplier","Supplier phone","Notes"]]
-      .concat(list.map(it=>{ const s=supById(it.supplierId); return [it.name,it.category,it.location,it.quantity||0,it.unit,it.minLevel||0,statusText[status(it)],s?.name,s?.phone,it.notes]; })));
+    const rows=[["Item","Size","Category","Location","Quantity","Unit","Low-stock level","Status","Supplier","Supplier phone","Notes"]];
+    list.forEach(it=>{
+      const s=supById(it.supplierId), min=it.minLevel||0;
+      if(sized(it)) it.sizes.forEach(z=>{
+        const zs=sizeStatus(z,min);
+        if(statusFilter==="low" && zs==="ok") return;
+        if(statusFilter==="out" && zs!=="out") return;
+        rows.push([it.name,z.size,it.category,it.location,z.quantity,it.unit,min,statusText[zs],s?.name,s?.phone,it.notes]);
+      });
+      else rows.push([it.name,"",it.category,it.location,it.quantity||0,it.unit,min,statusText[status(it)],s?.name,s?.phone,it.notes]);
+    });
+    downloadCsv(`${label}-list-${today()}.csv`, rows);
     toast(statusFilter==="all"?"Stock list downloaded":"Filtered list downloaded");
   };
   $("#dlLog").onclick=()=>{
     const list=filteredMoves(); if(!list.length){ toast("Nothing to download with these filters"); return; }
-    downloadCsv(`issue-log-${today()}.csv`, [["Date","Type","Item","Quantity","Unit","Issued to / received from","Purpose","Recorded by","Notes"]]
-      .concat(list.map(m=>[fmtDate(m.date),m.type==="issued"?"Issued":"Received",m.itemName,m.qty,m.unit,m.person,m.purpose,m.by,m.notes])));
+    downloadCsv(`issue-log-${today()}.csv`, [["Date","Type","Item","Size","Quantity","Unit","Issued to / received from","Purpose","Recorded by","Notes"]]
+      .concat(list.map(m=>[fmtDate(m.date),m.type==="issued"?"Issued":"Received",m.itemName,m.size||"",m.qty,m.unit,m.person,m.purpose,m.by,m.notes])));
     toast("Log downloaded");
   };
   $("#dlSup").onclick=()=>{

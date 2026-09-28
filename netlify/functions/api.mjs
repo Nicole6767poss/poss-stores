@@ -9,7 +9,7 @@ import crypto from "node:crypto";
 export const config = { path: "/api/*" };
 
 const TOKEN_DAYS = 30;
-const EMPTY = () => ({ version: 0, items: [], moves: [], suppliers: [] });
+const EMPTY = () => ({ version: 0, items: [], moves: [], suppliers: [], lists: { recipients: [], staff: [] } });
 
 class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
 const json = (data, status = 200) =>
@@ -71,16 +71,33 @@ const newId = () => crypto.randomBytes(9).toString("base64url");
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 const validId = (s) => /^[A-Za-z0-9_-]{6,40}$/.test(s || "");
 
+// Sizes: [{size:"M", quantity:5}, …] in the order the user entered them. null = item has no sizes.
+function cleanSizes(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  const seen = new Set(), out = [];
+  for (const x of list.slice(0, 40)) {
+    const size = str(x?.size, 20);
+    if (!size || seen.has(size.toLowerCase())) continue;
+    const q = whole(x.quantity);
+    if (Number.isNaN(q)) throw new HttpError(400, `Quantity for size ${size} must be a whole number, 0 or more.`);
+    seen.add(size.toLowerCase()); out.push({ size, quantity: q });
+  }
+  return out.length ? out : null;
+}
+const total = (it) => it.sizes.reduce((t, x) => t + x.quantity, 0);
+const findSize = (it, size) => it.sizes?.find((x) => x.size.toLowerCase() === String(size || "").trim().toLowerCase());
+
 function cleanItem(b) {
   const name = str(b.name, 120);
   if (!name) throw new HttpError(400, "Give the item a name.");
-  const quantity = whole(b.quantity), minLevel = b.minLevel === "" || b.minLevel == null ? 0 : whole(b.minLevel);
+  const sizes = cleanSizes(b.sizes);
+  const quantity = sizes ? sizes.reduce((t, x) => t + x.quantity, 0) : whole(b.quantity), minLevel = b.minLevel === "" || b.minLevel == null ? 0 : whole(b.minLevel);
   if (Number.isNaN(quantity)) throw new HttpError(400, "Quantity must be a whole number, 0 or more.");
   if (Number.isNaN(minLevel)) throw new HttpError(400, "Low-stock level must be a whole number, 0 or more.");
   return {
     name, quantity, minLevel,
     category: str(b.category, 60), location: str(b.location, 60), unit: str(b.unit, 30),
-    notes: str(b.notes, 600), supplierId: str(b.supplierId, 40),
+    notes: str(b.notes, 600), supplierId: str(b.supplierId, 40), sizes,
     photo: b.photo && validId(b.photo) ? b.photo : null,
   };
 }
@@ -93,7 +110,13 @@ function cleanSupplier(b) {
     accountRef: str(b.accountRef, 60), supplies: str(b.supplies, 300), notes: str(b.notes, 800),
   };
 }
-const status = (it) => (it.quantity <= 0 ? "out" : it.quantity <= (it.minLevel || 0) ? "low" : "ok");
+const status = (it) => {
+  if (it.sizes?.length) {
+    if (it.sizes.every((x) => x.quantity <= 0)) return "out";
+    return it.sizes.some((x) => x.quantity <= (it.minLevel || 0)) ? "low" : "ok";
+  }
+  return it.quantity <= 0 ? "out" : it.quantity <= (it.minLevel || 0) ? "low" : "ok";
+};
 
 async function deletePhoto(id) { if (id) { try { await store().delete("photo/" + id); } catch {} } }
 
@@ -189,18 +212,26 @@ export default async (req) => {
           const type = b.type === "received" ? "received" : "issued";
           const qty = whole(b.qty);
           if (!(qty >= 1)) throw new HttpError(400, "Enter a quantity of at least 1.");
-          if (type === "issued" && qty > it.quantity) throw new HttpError(400, `Only ${it.quantity} in stock. Issue ${it.quantity} or fewer.`);
+          let sz = null;
+          if (it.sizes?.length) {
+            sz = findSize(it, b.size);
+            if (!sz) throw new HttpError(400, "Choose a size.");
+          }
+          const avail = sz ? sz.quantity : it.quantity;
+          if (type === "issued" && qty > avail)
+            throw new HttpError(400, `Only ${avail} in stock${sz ? ` in size ${sz.size}` : ""}. Issue ${avail} or fewer.`);
           const person = str(b.person, 100);
           if (type === "issued" && !person) throw new HttpError(400, "Say who the items were issued to.");
           const date = isDate(b.date) ? b.date : new Date().toISOString().slice(0, 10);
-          it.quantity += type === "issued" ? -qty : qty;
+          const delta = type === "issued" ? -qty : qty;
+          if (sz) { sz.quantity += delta; it.quantity = total(it); } else it.quantity += delta;
           it.updatedAt = Date.now();
           d.moves.push({
-            id: newId(), type, itemId: it.id, itemName: it.name, unit: it.unit || "", qty, person,
+            id: newId(), type, itemId: it.id, itemName: it.name, size: sz ? sz.size : "", unit: it.unit || "", qty, person,
             purpose: type === "issued" ? str(b.purpose, 160) : "", by: str(b.by, 80), date,
             notes: str(b.notes, 400), createdAt: Date.now(),
           });
-          return { status: status(it), quantity: it.quantity };
+          return { status: status(it), quantity: sz ? sz.quantity : it.quantity, size: sz ? sz.size : "" };
         });
         return json({ ...data, result });
       }
@@ -211,12 +242,36 @@ export default async (req) => {
           if (!m) return;
           if (restock) {
             const it = d.items.find((x) => x.id === m.itemId);
-            if (it) it.quantity = Math.max(0, it.quantity + (m.type === "issued" ? m.qty : -m.qty));
+            if (it) {
+              const delta = m.type === "issued" ? m.qty : -m.qty;
+              if (m.size && it.sizes?.length) {
+                let sz = findSize(it, m.size);
+                if (!sz) { sz = { size: m.size, quantity: 0 }; it.sizes.push(sz); }
+                sz.quantity = Math.max(0, sz.quantity + delta);
+                it.quantity = total(it);
+              } else it.quantity = Math.max(0, it.quantity + delta);
+            }
           }
           d.moves = d.moves.filter((x) => x.id !== id);
         });
         return json(data);
       }
+    }
+
+    // Preset name lists (drop-downs for "Issued to" and "Recorded by")
+    if (resource === "lists" && method === "POST") {
+      const b = await req.json();
+      if (!["recipients", "staff"].includes(b.list)) throw new HttpError(400, "Unknown list.");
+      const tidy = (arr) => [...new Map(arr.map((n) => str(n, 100)).filter(Boolean).map((n) => [n.toLowerCase(), n])).values()]
+        .sort((a, c) => a.localeCompare(c)).slice(0, 500);
+      const { data } = await mutate((d) => {
+        d.lists ||= { recipients: [], staff: [] };
+        let arr = d.lists[b.list] || [];
+        if (Array.isArray(b.add)) arr = arr.concat(b.add);
+        if (b.remove) arr = arr.filter((n) => n.toLowerCase() !== String(b.remove).toLowerCase());
+        d.lists[b.list] = tidy(arr);
+      });
+      return json(data);
     }
 
     // Suppliers
